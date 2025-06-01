@@ -207,7 +207,7 @@ const MyEvents = () => {
                                                     See Participants
                                                 </Button>
                                                 <Button variant="outline" asChild>
-                                                    <Link to={`/events/${event._id}/edit`}>
+                                                    <Link to={`/edit-event/${event._id}`}>
                                                         <Edit className="h-4 w-4 mr-2" />
                                                         Edit Event
                                                     </Link>
