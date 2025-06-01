@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, Users, MapPin, Clock, ArrowRight } from 'lucide-react';
+import { CalendarDays, Users, MapPin, Clock, ArrowRight ,Search,ShieldCheck} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,15 +21,15 @@ const Index = () => {
       description: "Seamless event registration process for both organizers and participants"
     },
     {
-      icon: MapPin,
-      title: "Location Integration",
-      description: "Integrated maps and location services for easy venue discovery"
+      icon: Search,
+      title: "Event Filtering",
+      description: "Quickly find events using built-in search and filter options"
     },
     {
-      icon: Clock,
-      title: "Real-time Updates",
-      description: "Get instant notifications about event changes and reminders"
-    }
+      icon: ShieldCheck,
+      title: "Secure Access",
+      description: "Role-based access control and secure authentication with JWT"
+    },
   ];
 
   return (
