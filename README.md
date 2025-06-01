@@ -2,7 +2,7 @@
 
 A modern, full-stack event management platform built with the MERN stack (MongoDB, Express.js, React, Node.js) that allows organizers to create and manage events while enabling participants to discover and register for events.
 
-![Event Management System](public/screenshot.png)
+![Event Management System](public/demo.jpg)
 
 ## 🌟 Features
 
