@@ -39,12 +39,9 @@ export const Header = () => {
                                 Create Event
                             </Link>
                         )}
-                        <Link to="/about" className="text-gray-600 hover:text-blue-600 transition-colors">
-                            About
-                        </Link>
                     </div>
 
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-4">
                         {isAuthenticated && user ? (
                             <div className="flex items-center space-x-4">
                                 <span className="text-gray-600">Welcome, {user.firstName}!</span>
@@ -63,9 +60,11 @@ export const Header = () => {
                                         <DropdownMenuItem>
                                             <Link to="/profile">Profile</Link>
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem>
-                                            <Link to="/my-events">My Events</Link>
-                                        </DropdownMenuItem>
+                                        {user.role === 'organizer' && (
+                                            <DropdownMenuItem>
+                                                <Link to="/my-events">My Events</Link>
+                                            </DropdownMenuItem>
+                                        )}
                                         <DropdownMenuItem onClick={handleLogout}>
                                             Logout
                                         </DropdownMenuItem>

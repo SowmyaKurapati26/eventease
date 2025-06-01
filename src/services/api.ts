@@ -1,8 +1,10 @@
+import { getAuthToken } from '@/lib/auth';
+
 const API_BASE_URL = 'http://localhost:5000/api';
 
 // API utility function
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('token');
+  const token = getAuthToken();
 
   const config: RequestInit = {
     method: 'GET', // Default method

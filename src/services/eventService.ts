@@ -1,4 +1,7 @@
-import apiRequest from './api';
+import axios from 'axios';
+import { getAuthToken } from '@/lib/auth';
+
+const API_URL = 'http://localhost:5000/api';
 
 export interface Event {
   _id: string;
@@ -13,19 +16,19 @@ export interface Event {
     _id: string;
     firstName: string;
     lastName: string;
-    email?: string;
+    email: string;
   };
   attendees: Array<{
     _id: string;
     firstName: string;
     lastName: string;
-    email?: string;
+    email: string;
   }>;
   maxAttendees: number | null;
   price: number;
   isPrivate: boolean;
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
-  image: string;
+  image?: string;
   registrationDeadline?: string;
   additionalDetails?: Record<string, string>;
   createdAt: string;
@@ -44,9 +47,9 @@ export interface EventFilters {
 
 export interface EventsResponse {
   events: Event[];
-  totalPages: number;
-  currentPage: number;
   total: number;
+  totalPages?: number;
+  currentPage?: number;
 }
 
 export interface UserEvents {
@@ -54,62 +57,91 @@ export interface UserEvents {
   attending: Event[];
 }
 
-export const eventService = {
-  async getAllEvents(filters?: EventFilters): Promise<EventsResponse> {
-    const queryParams = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString());
-      });
+const getHeaders = () => {
+  const token = getAuthToken();
+  return {
+    headers: {
+      Authorization: `Bearer ${token}`
     }
-    return apiRequest(`/events?${queryParams.toString()}`);
-  },
+  };
+};
 
-  async getEvent(id: string): Promise<Event> {
-    return apiRequest(`/events/${id}`);
-  },
-
-  async createEvent(eventData: Omit<Event, '_id' | 'organizer' | 'attendees' | 'status' | 'createdAt' | 'updatedAt'>): Promise<Event> {
-    return apiRequest('/events', {
-      method: 'POST',
-      body: JSON.stringify(eventData),
+export const eventService = {
+  async getAllEvents(params?: { category?: string; search?: string }) {
+    const response = await axios.get(`${API_URL}/events`, {
+      params,
+      ...getHeaders()
     });
+    return response.data;
   },
 
-  async updateEvent(id: string, eventData: Partial<Omit<Event, '_id' | 'organizer' | 'attendees'>>): Promise<Event> {
-    return apiRequest(`/events/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(eventData),
+  async getEvent(id: string) {
+    const response = await axios.get(`${API_URL}/events/${id}`, getHeaders());
+    return response.data;
+  },
+
+  async createEvent(eventData: FormData) {
+    const response = await axios.post(`${API_URL}/events`, eventData, {
+      ...getHeaders(),
+      headers: {
+        ...getHeaders().headers,
+        'Content-Type': 'multipart/form-data'
+      }
     });
+    return response.data;
   },
 
-  async deleteEvent(id: string): Promise<void> {
-    return apiRequest(`/events/${id}`, {
-      method: 'DELETE',
+  async updateEvent(id: string, eventData: FormData) {
+    const response = await axios.put(`${API_URL}/events/${id}`, eventData, {
+      ...getHeaders(),
+      headers: {
+        ...getHeaders().headers,
+        'Content-Type': 'multipart/form-data'
+      }
     });
+    return response.data;
   },
 
-  async joinEvent(id: string): Promise<Event> {
-    return apiRequest(`/events/${id}/join`, {
-      method: 'POST',
-    });
+  async deleteEvent(id: string) {
+    const response = await axios.delete(`${API_URL}/events/${id}`, getHeaders());
+    return response.data;
   },
 
-  async leaveEvent(id: string): Promise<Event> {
-    return apiRequest(`/events/${id}/leave`, {
-      method: 'POST',
-    });
+  async joinEvent(id: string) {
+    const response = await axios.post(`${API_URL}/events/${id}/join`, {}, getHeaders());
+    return response.data;
   },
 
-  async getCalendarEvents(year: number, month: number): Promise<Event[]> {
-    return apiRequest(`/events/calendar/${year}/${month}`);
+  async leaveEvent(id: string) {
+    const response = await axios.post(`${API_URL}/events/${id}/leave`, {}, getHeaders());
+    return response.data;
+  },
+
+  async getCalendarEvents(year: number, month: number) {
+    const response = await axios.get(`${API_URL}/events/calendar/${year}/${month}`, getHeaders());
+    return response.data;
   },
 
   async getMyEvents(): Promise<UserEvents> {
-    return apiRequest('/events/my-events');
+    const response = await axios.get<UserEvents>(`${API_URL}/events/my-events`, getHeaders());
+    return response.data;
   },
 
   async getEventAttendees(id: string): Promise<Event['attendees']> {
-    return apiRequest(`/events/${id}/attendees`);
+    const response = await axios.get<Event['attendees']>(`${API_URL}/events/${id}/attendees`, getHeaders());
+    return response.data;
+  },
+
+  async getOrganizerEvents(organizerId: string) {
+    const response = await axios.get(`${API_URL}/events/organizer/${organizerId}`, getHeaders());
+    return response.data;
+  },
+
+  async registerForEvent(eventId: string, userId: string): Promise<void> {
+    await axios.post(`${API_URL}/events/${eventId}/register/${userId}`, {}, getHeaders());
+  },
+
+  async unregisterFromEvent(eventId: string, userId: string): Promise<void> {
+    await axios.post(`${API_URL}/events/${eventId}/unregister/${userId}`, {}, getHeaders());
   }
 };

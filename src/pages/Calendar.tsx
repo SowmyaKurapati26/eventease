@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, MapPin, Clock } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { eventService, Event } from '@/services/eventService';
 import { format } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
+import { BackButton } from '@/components/BackButton';
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -13,24 +15,35 @@ const Calendar = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user, isAuthenticated } = useAuth();
+  const location = useLocation();
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const response = await eventService.getCalendarEvents(
-          currentDate.getFullYear(),
-          currentDate.getMonth() + 1
-        );
-        setEvents(response);
-        setLoading(false);
-      } catch (err) {
-        setError('Failed to load events');
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await eventService.getCalendarEvents(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1
+      );
+      setEvents(response as Event[]);
+    } catch (err) {
+      console.error('Error fetching calendar events:', err);
+      setError('Failed to load events');
+    } finally {
+      setLoading(false);
+    }
   }, [currentDate]);
+
+  // Initial fetch and refresh on navigation or date change
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents, location.key]);
+
+  // Add a refresh function that can be called manually
+  const refreshCalendar = () => {
+    fetchEvents();
+  };
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -60,9 +73,17 @@ const Calendar = () => {
     const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     return events.filter(event => {
       const eventDate = new Date(event.date);
-      return eventDate.getDate() === day &&
-        eventDate.getMonth() === currentDate.getMonth() &&
-        eventDate.getFullYear() === currentDate.getFullYear();
+      return (
+        eventDate.getFullYear() === targetDate.getFullYear() &&
+        eventDate.getMonth() === targetDate.getMonth() &&
+        eventDate.getDate() === targetDate.getDate()
+      );
+    }).sort((a, b) => {
+      // Sort by time if on the same day
+      const timeA = a.time.split(':').map(Number);
+      const timeB = b.time.split(':').map(Number);
+      if (timeA[0] !== timeB[0]) return timeA[0] - timeB[0];
+      return timeA[1] - timeB[1];
     });
   };
 
@@ -123,21 +144,36 @@ const Calendar = () => {
       <nav className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center space-x-2">
-              <CalendarDays className="h-8 w-8 text-blue-600" />
-              <span className="text-2xl font-bold text-gray-900">Event Ease</span>
-            </Link>
+            <BackButton />
             <div className="hidden md:flex items-center space-x-6">
               <Link to="/events" className="text-gray-600 hover:text-blue-600 transition-colors">Events</Link>
               <Link to="/calendar" className="text-blue-600 font-medium">Calendar</Link>
-              <Link to="/dashboard" className="text-gray-600 hover:text-blue-600 transition-colors">Dashboard</Link>
+              {!isAuthenticated && (
+                <Button asChild variant="outline">
+                  <Link to="/login">Log in</Link>
+                </Button>
+              )}
             </div>
-            <Button asChild className="bg-blue-600 hover:bg-blue-700">
-              <Link to="/create-event">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Event
-              </Link>
-            </Button>
+
+            <div className="flex items-center space-x-2">
+              {user?.role === 'organizer' && (
+                <Button asChild className="bg-blue-600 hover:bg-blue-700">
+                  <Link to="/create-event">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Event
+                  </Link>
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refreshCalendar}
+                className="flex items-center"
+              >
+                <CalendarDays className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
       </nav>
@@ -234,14 +270,14 @@ const Calendar = () => {
                             </div>
                             <div className="space-y-1">
                               {dayEvents.slice(0, 2).map(event => (
-                                <div
-                                  key={event.id}
-                                  className={`text-xs p-1 rounded text-white truncate ${getCategoryColor(event.category)
-                                    }`}
-                                  title={event.title}
+                                <Link
+                                  key={event._id}
+                                  to={isAuthenticated ? `/events/${event._id}` : "/login"}
+                                  className={`block text-xs p-1 rounded text-white truncate ${getCategoryColor(event.category)}`}
+                                  title={`${event.title}${!isAuthenticated ? ' - Log in to view details' : ''}`}
                                 >
                                   {event.title}
-                                </div>
+                                </Link>
                               ))}
                               {dayEvents.length > 2 && (
                                 <div className="text-xs text-gray-500 pl-1">
@@ -268,7 +304,11 @@ const Calendar = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {events.slice(0, 4).map(event => (
-                  <div key={event._id} className="border-l-4 border-blue-500 pl-3">
+                  <Link
+                    key={event._id}
+                    to={isAuthenticated ? `/events/${event._id}` : "/login"}
+                    className="block border-l-4 border-blue-500 pl-3 hover:bg-gray-50"
+                  >
                     <h4 className="font-medium text-sm line-clamp-2">{event.title}</h4>
                     <div className="flex items-center text-xs text-gray-600 mt-1">
                       <CalendarDays className="h-3 w-3 mr-1" />
@@ -282,10 +322,12 @@ const Calendar = () => {
                       <MapPin className="h-3 w-3 mr-1" />
                       {event.location}
                     </div>
-                  </div>
+                  </Link>
                 ))}
                 <Button variant="outline" className="w-full" asChild>
-                  <Link to="/events">View All Events</Link>
+                  <Link to={isAuthenticated ? "/events" : "/login"}>
+                    {isAuthenticated ? "View All Events" : "Log in to View All Events"}
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -296,29 +338,33 @@ const Calendar = () => {
                 <CardTitle>Categories</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {['Technology', 'Design', 'Networking', 'Business', 'Arts'].map(category => (
+                {['conference', 'workshop', 'seminar', 'networking', 'other'].map(category => (
                   <div key={category} className="flex items-center space-x-2">
                     <div className={`w-3 h-3 rounded ${getCategoryColor(category)}`}></div>
-                    <span className="text-sm">{category}</span>
+                    <span className="text-sm capitalize">{category}</span>
                   </div>
                 ))}
               </CardContent>
             </Card>
 
             {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button className="w-full" asChild>
-                  <Link to="/create-event">Create Event</Link>
-                </Button>
-                <Button variant="outline" className="w-full" asChild>
-                  <Link to="/events">Browse Events</Link>
-                </Button>
-              </CardContent>
-            </Card>
+            {isAuthenticated && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {user?.role === 'organizer' && (
+                    <Button className="w-full" asChild>
+                      <Link to="/create-event">Create Event</Link>
+                    </Button>
+                  )}
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link to="/events">Browse Events</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

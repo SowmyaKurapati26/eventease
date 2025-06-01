@@ -97,14 +97,33 @@ eventSchema.methods.canRegister = function (userId) {
 eventSchema.methods.updateStatus = function () {
   const now = new Date();
   const eventDate = new Date(this.date);
+  const eventDateTime = new Date(this.date);
+  const [hours, minutes] = this.time.split(':').map(Number);
+  eventDateTime.setHours(hours, minutes);
 
   if (this.status === 'cancelled') return;
 
-  if (eventDate < now) {
+  // If event date is in the past
+  if (eventDateTime < now) {
     this.status = 'completed';
-  } else if (eventDate.toDateString() === now.toDateString()) {
-    this.status = 'ongoing';
-  } else {
+  }
+  // If event is today
+  else if (eventDate.toDateString() === now.toDateString()) {
+    // If event time has passed
+    if (eventDateTime < now) {
+      this.status = 'completed';
+    }
+    // If event is currently happening (within a 2-hour window)
+    else if (eventDateTime.getTime() - now.getTime() <= 2 * 60 * 60 * 1000) {
+      this.status = 'ongoing';
+    }
+    // If event is today but hasn't started yet
+    else {
+      this.status = 'upcoming';
+    }
+  }
+  // If event is in the future
+  else {
     this.status = 'upcoming';
   }
 };

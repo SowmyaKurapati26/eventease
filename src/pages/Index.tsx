@@ -1,37 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CalendarDays, Users, MapPin, Clock, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { eventService, Event } from '@/services/eventService';
-import { format } from 'date-fns';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
-  const [featuredEvents, setFeaturedEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { isAuthenticated, user } = useAuth();
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const response = await eventService.getAllEvents({
-          limit: 3,
-          status: 'upcoming',
-          page: 1
-        });
-        setFeaturedEvents(response.events);
-        setLoading(false);
-      } catch (err) {
-        setError('Failed to load events');
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
-  }, []);
 
   const features = [
     {
@@ -72,17 +48,17 @@ const Index = () => {
             Event Ease makes event management simple and enjoyable.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            {isAuthenticated && user?.role === 'organizer' ? (
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 px-8 py-3 text-lg" asChild>
-                <Link to="/create-event">
-                  Create Event
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
-            ) : (
+            {!isAuthenticated ? (
               <Button size="lg" className="bg-blue-600 hover:bg-blue-700 px-8 py-3 text-lg" asChild>
                 <Link to="/register">
                   Get Started
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+            ) : user?.role === 'organizer' && (
+              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 px-8 py-3 text-lg" asChild>
+                <Link to="/create-event">
+                  Create Event
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
@@ -121,83 +97,22 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Featured Events */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Featured Events
-            </h2>
-            <p className="text-lg text-gray-600">
-              Discover amazing events happening near you
-            </p>
-          </div>
-          {loading ? (
-            <div className="text-center text-gray-600">Loading events...</div>
-          ) : error ? (
-            <div className="text-center text-red-600">{error}</div>
-          ) : featuredEvents.length === 0 ? (
-            <div className="text-center text-gray-600">
-              No events available. {user?.role === 'organizer' ? (
-                <Link to="/create-event" className="text-blue-600 hover:underline">Create one now!</Link>
-              ) : (
-                'Be the first to create one!'
-              )}
-            </div>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {featuredEvents.map((event) => (
-                <Card key={event._id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="aspect-video bg-gradient-to-r from-blue-500 to-orange-500"></div>
-                  <CardHeader>
-                    <CardTitle className="text-lg">{event.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 text-sm text-gray-600">
-                      <div className="flex items-center">
-                        <CalendarDays className="h-4 w-4 mr-2" />
-                        {format(new Date(event.date), 'MMMM d, yyyy')}
-                      </div>
-                      <div className="flex items-center">
-                        <Clock className="h-4 w-4 mr-2" />
-                        {event.time}
-                      </div>
-                      <div className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-2" />
-                        {event.location}
-                      </div>
-                      <div className="flex items-center">
-                        <Users className="h-4 w-4 mr-2" />
-                        {event.attendees.length} attendees
-                      </div>
-                    </div>
-                    <Button className="w-full mt-4" variant="outline" asChild>
-                      <Link to={`/events/${event._id}`}>View Details</Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* CTA Section */}
-      <section className="py-16 px-4 bg-blue-600 text-white">
-        <div className="container mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Ready to Get Started?
-          </h2>
-          <p className="text-xl mb-8 opacity-90">
-            Join thousands of organizers and participants using Event Ease
-          </p>
-          {!isAuthenticated && (
+      {!isAuthenticated && (
+        <section className="py-16 px-4 bg-blue-600 text-white">
+          <div className="container mx-auto text-center">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Ready to Get Started?
+            </h2>
+            <p className="text-xl mb-8 opacity-90">
+              Join thousands of organizers and participants using Event Ease
+            </p>
             <Button size="lg" variant="secondary" className="px-8 py-3 text-lg" asChild>
               <Link to="/register">Create Your Account</Link>
             </Button>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12 px-4">
@@ -225,7 +140,6 @@ const Index = () => {
             <div>
               <h3 className="font-semibold mb-4">Company</h3>
               <ul className="space-y-2 text-gray-400">
-                <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
                 <li><Link to="/contact" className="hover:text-white transition-colors">Contact</Link></li>
                 <li><Link to="/support" className="hover:text-white transition-colors">Support</Link></li>
               </ul>
@@ -239,7 +153,7 @@ const Index = () => {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 Event Ease. All rights reserved.</p>
+            <p>&copy; 2025 Event Ease. All rights reserved.</p>
           </div>
         </div>
       </footer>

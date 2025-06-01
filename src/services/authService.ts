@@ -1,4 +1,5 @@
 import apiRequest from './api';
+import { setAuthToken, removeAuthToken } from '@/lib/auth';
 
 export interface LoginData {
   email: string;
@@ -56,7 +57,7 @@ export const authService = {
       });
 
       if (response.token) {
-        localStorage.setItem('token', response.token);
+        setAuthToken(response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
       }
 
@@ -74,7 +75,7 @@ export const authService = {
     });
 
     if (response.token) {
-      localStorage.setItem('token', response.token);
+      setAuthToken(response.token);
       localStorage.setItem('user', JSON.stringify(response.user));
     }
 
@@ -82,7 +83,7 @@ export const authService = {
   },
 
   logout() {
-    localStorage.removeItem('token');
+    removeAuthToken();
     localStorage.removeItem('user');
   },
 
@@ -92,6 +93,6 @@ export const authService = {
   },
 
   isAuthenticated() {
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem('auth_token');
   }
 };

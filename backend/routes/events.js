@@ -2,8 +2,47 @@ const express = require('express');
 const Event = require('../models/Event');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
+
+// Configure multer for storing files
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, '../../uploads/'));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
+    }
+  }
+});
+
+// Helper function to update event statuses
+const updateEventStatuses = async (events) => {
+  const updatedEvents = [];
+  for (const event of events) {
+    event.updateStatus();
+    if (event.isModified('status')) {
+      await event.save();
+    }
+    updatedEvents.push(event);
+  }
+  return updatedEvents;
+};
 
 // Get all events with filtering
 router.get('/', async (req, res) => {
@@ -38,12 +77,15 @@ router.get('/', async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const events = await Event.find(query)
+    let events = await Event.find(query)
       .populate('organizer', 'firstName lastName')
       .populate('attendees', 'firstName lastName')
       .sort({ date: 1 })
       .skip(skip)
       .limit(parseInt(limit));
+
+    // Update event statuses
+    events = await updateEventStatuses(events);
 
     const total = await Event.countDocuments(query);
 
@@ -60,23 +102,35 @@ router.get('/', async (req, res) => {
 });
 
 // Get events by calendar month
-router.get('/calendar/:year/:month', auth, async (req, res) => {
+router.get('/calendar/:year/:month', async (req, res) => {
   try {
     const { year, month } = req.params;
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
 
-    const events = await Event.find({
+    // Base query for public events
+    const query = {
       date: {
         $gte: startDate,
         $lte: endDate
       },
-      $or: [
+      isPrivate: false
+    };
+
+    // If user is authenticated, include their private events
+    if (req.user) {
+      query.$or = [
         { isPrivate: false },
         { organizer: req.user._id },
         { attendees: req.user._id }
-      ]
-    }).populate('organizer', 'firstName lastName');
+      ];
+      delete query.isPrivate;
+    }
+
+    let events = await Event.find(query).populate('organizer', 'firstName lastName');
+
+    // Update event statuses
+    events = await updateEventStatuses(events);
 
     res.json(events);
   } catch (error) {
@@ -88,18 +142,22 @@ router.get('/calendar/:year/:month', auth, async (req, res) => {
 // Get user's events (created and attending)
 router.get('/my-events', auth, async (req, res) => {
   try {
-    const createdEvents = await Event.find({ organizer: req.user._id })
+    let createdEvents = await Event.find({ organizer: req.user._id })
       .populate('organizer', 'firstName lastName')
       .populate('attendees', 'firstName lastName')
       .sort({ date: 1 });
 
-    const attendingEvents = await Event.find({
+    let attendingEvents = await Event.find({
       attendees: req.user._id,
       organizer: { $ne: req.user._id }
     })
       .populate('organizer', 'firstName lastName')
       .populate('attendees', 'firstName lastName')
       .sort({ date: 1 });
+
+    // Update event statuses
+    createdEvents = await updateEventStatuses(createdEvents);
+    attendingEvents = await updateEventStatuses(attendingEvents);
 
     res.json({
       created: createdEvents,
@@ -122,6 +180,12 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
+    // Update event status
+    event.updateStatus();
+    if (event.isModified('status')) {
+      await event.save();
+    }
+
     res.json(event);
   } catch (error) {
     console.error(error);
@@ -130,18 +194,26 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create event (protected, organizer only)
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, upload.single('image'), async (req, res) => {
   try {
     // Check if user is an organizer
     if (req.user.role !== 'organizer') {
       return res.status(403).json({ message: 'Only organizers can create events' });
     }
 
-    const event = new Event({
+    // Parse numeric values
+    const eventData = {
       ...req.body,
-      organizer: req.user._id
-    });
+      organizer: req.user._id,
+      price: parseFloat(req.body.price) || 0,
+      maxAttendees: req.body.maxAttendees ? parseInt(req.body.maxAttendees) : null,
+      isPrivate: req.body.isPrivate === 'true',
+      image: req.file ? req.file.filename : null
+    };
 
+    console.log('Creating event with data:', eventData);
+
+    const event = new Event(eventData);
     await event.save();
 
     // Add to user's created events
@@ -154,13 +226,21 @@ router.post('/', auth, async (req, res) => {
 
     res.status(201).json(populatedEvent);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error creating event' });
+    console.error('Error creating event:', error);
+    // If there's an error and we uploaded a file, delete it
+    if (req.file) {
+      try {
+        fs.unlinkSync(path.join(__dirname, '../../uploads/', req.file.filename));
+      } catch (unlinkError) {
+        console.error('Error deleting uploaded file:', unlinkError);
+      }
+    }
+    res.status(400).json({ message: error.message });
   }
 });
 
 // Update event (protected, organizer only)
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, upload.single('image'), async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
 
@@ -173,20 +253,57 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to update this event' });
     }
 
+    // Parse the form data
+    const updateData = {
+      ...req.body,
+      price: parseFloat(req.body.price) || 0,
+      maxAttendees: req.body.maxAttendees ? parseInt(req.body.maxAttendees) : null,
+      isPrivate: req.body.isPrivate === 'true'
+    };
+
+    // Handle date fields
+    if (req.body.date) {
+      updateData.date = new Date(req.body.date);
+    }
+    if (req.body.registrationDeadline) {
+      updateData.registrationDeadline = new Date(req.body.registrationDeadline);
+    }
+
+    // Handle image update
+    if (req.file) {
+      // Delete old image if it exists
+      if (event.image) {
+        try {
+          fs.unlinkSync(path.join(__dirname, '../../uploads/', event.image));
+        } catch (err) {
+          console.error('Error deleting old image:', err);
+        }
+      }
+      updateData.image = req.file.filename;
+    }
+
     // Don't allow updating certain fields directly
-    delete req.body.organizer;
-    delete req.body.attendees;
+    delete updateData.organizer;
+    delete updateData.attendees;
 
     const updatedEvent = await Event.findByIdAndUpdate(
       req.params.id,
-      { ...req.body },
+      updateData,
       { new: true }
     ).populate('organizer', 'firstName lastName')
       .populate('attendees', 'firstName lastName');
 
     res.json(updatedEvent);
   } catch (error) {
-    console.error(error);
+    console.error('Error updating event:', error);
+    // If there's an error and we uploaded a file, delete it
+    if (req.file) {
+      try {
+        fs.unlinkSync(path.join(__dirname, '../../uploads/', req.file.filename));
+      } catch (unlinkError) {
+        console.error('Error deleting uploaded file:', unlinkError);
+      }
+    }
     res.status(500).json({ message: 'Server error updating event' });
   }
 });
