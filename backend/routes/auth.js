@@ -47,7 +47,10 @@ router.post('/register', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error(error);
+    console.error('Registration error details:', {
+      message: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ message: 'Server error during registration' });
   }
 });
@@ -55,16 +58,25 @@ router.post('/register', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
   try {
+    console.log('Raw request body:', req.body);
+    console.log('Content-Type:', req.get('Content-Type'));
+
     const { email, password } = req.body;
+
+    console.log('Extracted credentials:', { email, password: '***' });
 
     // Check if user exists
     const user = await User.findOne({ email });
+    console.log('User found:', user ? 'Yes' : 'No');
+
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     // Check password
     const isMatch = await user.comparePassword(password);
+    console.log('Password match:', isMatch ? 'Yes' : 'No');
+
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
@@ -84,7 +96,7 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error(error);
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Server error during login' });
   }
 });

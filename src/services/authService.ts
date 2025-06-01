@@ -1,4 +1,3 @@
-
 import apiRequest from './api';
 
 export interface LoginData {
@@ -27,17 +26,45 @@ export interface AuthResponse {
 
 export const authService = {
   async login(data: LoginData): Promise<AuthResponse> {
-    const response = await apiRequest('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    
-    if (response.token) {
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
+    try {
+      // Debug log
+      console.log('Login data:', data);
+
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid login data format');
+      }
+
+      const { email, password } = data;
+
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+
+      const requestBody = {
+        email: email.trim(),
+        password: password
+      };
+
+      console.log('Sending login request with:', { email: requestBody.email, password: '***' });
+
+      const response = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Auth service login error:', error);
+      throw error;
     }
-    
-    return response;
   },
 
   async register(data: RegisterData): Promise<AuthResponse> {
@@ -45,12 +72,12 @@ export const authService = {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    
+
     if (response.token) {
       localStorage.setItem('token', response.token);
       localStorage.setItem('user', JSON.stringify(response.user));
     }
-    
+
     return response;
   },
 

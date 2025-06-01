@@ -1,50 +1,36 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, MapPin, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { eventService, Event } from '@/services/eventService';
+import { format } from 'date-fns';
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Sample events data
-  const events = [
-    {
-      id: 1,
-      title: "Tech Innovation Summit",
-      date: new Date(2024, 2, 15), // March 15, 2024
-      time: "9:00 AM",
-      location: "Convention Center",
-      category: "Technology"
-    },
-    {
-      id: 2,
-      title: "Design Workshop",
-      date: new Date(2024, 2, 20), // March 20, 2024
-      time: "2:00 PM",
-      location: "Design Studio",
-      category: "Design"
-    },
-    {
-      id: 3,
-      title: "Networking Happy Hour",
-      date: new Date(2024, 2, 22), // March 22, 2024
-      time: "6:00 PM",
-      location: "Rooftop Bar",
-      category: "Networking"
-    },
-    {
-      id: 4,
-      title: "Startup Pitch Competition",
-      date: new Date(2024, 2, 25), // March 25, 2024
-      time: "7:00 PM",
-      location: "Innovation Hub",
-      category: "Business"
-    }
-  ];
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const response = await eventService.getCalendarEvents(
+          currentDate.getFullYear(),
+          currentDate.getMonth() + 1
+        );
+        setEvents(response);
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to load events');
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [currentDate]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -55,28 +41,29 @@ const Calendar = () => {
     const startingDayOfWeek = firstDay.getDay();
 
     const days = [];
-    
+
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null);
     }
-    
+
     // Add all days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(day);
     }
-    
+
     return days;
   };
 
   const getEventsForDate = (day: number | null) => {
     if (!day) return [];
     const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    return events.filter(event => 
-      event.date.getDate() === day &&
-      event.date.getMonth() === currentDate.getMonth() &&
-      event.date.getFullYear() === currentDate.getFullYear()
-    );
+    return events.filter(event => {
+      const eventDate = new Date(event.date);
+      return eventDate.getDate() === day &&
+        eventDate.getMonth() === currentDate.getMonth() &&
+        eventDate.getFullYear() === currentDate.getFullYear();
+    });
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -100,14 +87,35 @@ const Calendar = () => {
 
   const getCategoryColor = (category: string) => {
     const colors: { [key: string]: string } = {
-      'Technology': 'bg-blue-500',
-      'Design': 'bg-purple-500',
-      'Networking': 'bg-green-500',
-      'Business': 'bg-orange-500',
-      'Arts': 'bg-pink-500'
+      'conference': 'bg-blue-500',
+      'workshop': 'bg-purple-500',
+      'seminar': 'bg-green-500',
+      'networking': 'bg-orange-500',
+      'other': 'bg-gray-500'
     };
     return colors[category] || 'bg-gray-500';
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading calendar...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center text-red-600">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -209,30 +217,27 @@ const Calendar = () => {
                   {days.map((day, index) => {
                     const dayEvents = getEventsForDate(day);
                     const isToday = day === new Date().getDate() &&
-                                   currentDate.getMonth() === new Date().getMonth() &&
-                                   currentDate.getFullYear() === new Date().getFullYear();
-                    
+                      currentDate.getMonth() === new Date().getMonth() &&
+                      currentDate.getFullYear() === new Date().getFullYear();
+
                     return (
                       <div
                         key={index}
-                        className={`min-h-24 p-1 border border-gray-200 ${
-                          day ? 'bg-white hover:bg-gray-50' : 'bg-gray-50'
-                        } ${isToday ? 'bg-blue-50 border-blue-200' : ''}`}
+                        className={`min-h-24 p-1 border border-gray-200 ${day ? 'bg-white hover:bg-gray-50' : 'bg-gray-50'
+                          } ${isToday ? 'bg-blue-50 border-blue-200' : ''}`}
                       >
                         {day && (
                           <>
-                            <div className={`text-sm font-medium mb-1 ${
-                              isToday ? 'text-blue-600' : 'text-gray-900'
-                            }`}>
+                            <div className={`text-sm font-medium mb-1 ${isToday ? 'text-blue-600' : 'text-gray-900'
+                              }`}>
                               {day}
                             </div>
                             <div className="space-y-1">
                               {dayEvents.slice(0, 2).map(event => (
                                 <div
                                   key={event.id}
-                                  className={`text-xs p-1 rounded text-white truncate ${
-                                    getCategoryColor(event.category)
-                                  }`}
+                                  className={`text-xs p-1 rounded text-white truncate ${getCategoryColor(event.category)
+                                    }`}
                                   title={event.title}
                                 >
                                   {event.title}
@@ -263,11 +268,11 @@ const Calendar = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {events.slice(0, 4).map(event => (
-                  <div key={event.id} className="border-l-4 border-blue-500 pl-3">
+                  <div key={event._id} className="border-l-4 border-blue-500 pl-3">
                     <h4 className="font-medium text-sm line-clamp-2">{event.title}</h4>
                     <div className="flex items-center text-xs text-gray-600 mt-1">
                       <CalendarDays className="h-3 w-3 mr-1" />
-                      {event.date.toLocaleDateString()}
+                      {format(new Date(event.date), 'MM/dd/yyyy')}
                     </div>
                     <div className="flex items-center text-xs text-gray-600 mt-1">
                       <Clock className="h-3 w-3 mr-1" />

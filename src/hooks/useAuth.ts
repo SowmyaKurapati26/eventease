@@ -1,59 +1,35 @@
+import { create } from 'zustand';
+import { authService, LoginData, RegisterData, AuthResponse } from '@/services/authService';
 
-import { useState, useEffect } from 'react';
-import { authService } from '../services/authService';
+interface AuthState {
+  user: AuthResponse['user'] | null;
+  isAuthenticated: boolean;
+  login: (data: LoginData) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => void;
+}
 
-export const useAuth = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+export const useAuth = create<AuthState>((set) => ({
+  user: authService.getCurrentUser(),
+  isAuthenticated: authService.isAuthenticated(),
 
-  useEffect(() => {
-    const checkAuth = () => {
-      const authenticated = authService.isAuthenticated();
-      const currentUser = authService.getCurrentUser();
-      
-      setIsAuthenticated(authenticated);
-      setUser(currentUser);
-      setLoading(false);
-    };
-
-    checkAuth();
-  }, []);
-
-  const login = async (email: string, password: string) => {
+  login: async (data: LoginData) => {
     try {
-      const response = await authService.login({ email, password });
-      setIsAuthenticated(true);
-      setUser(response.user);
-      return response;
+      const response = await authService.login(data);
+      set({ user: response.user, isAuthenticated: true });
     } catch (error) {
+      console.error('Login error:', error);
       throw error;
     }
-  };
+  },
 
-  const register = async (userData: any) => {
-    try {
-      const response = await authService.register(userData);
-      setIsAuthenticated(true);
-      setUser(response.user);
-      return response;
-    } catch (error) {
-      throw error;
-    }
-  };
+  register: async (data: RegisterData) => {
+    const response = await authService.register(data);
+    set({ user: response.user, isAuthenticated: true });
+  },
 
-  const logout = () => {
+  logout: () => {
     authService.logout();
-    setIsAuthenticated(false);
-    setUser(null);
-  };
-
-  return {
-    isAuthenticated,
-    user,
-    loading,
-    login,
-    register,
-    logout
-  };
-};
+    set({ user: null, isAuthenticated: false });
+  },
+}));

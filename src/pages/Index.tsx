@@ -1,40 +1,37 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, Users, MapPin, Clock, Star, ArrowRight } from 'lucide-react';
+import { CalendarDays, Users, MapPin, Clock, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { eventService, Event } from '@/services/eventService';
+import { format } from 'date-fns';
+import { Header } from '@/components/Header';
+import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
-  const featuredEvents = [
-    {
-      id: 1,
-      title: "Tech Innovation Summit 2024",
-      date: "March 15, 2024",
-      time: "9:00 AM",
-      location: "San Francisco Convention Center",
-      attendees: 250,
-      image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=200&fit=crop"
-    },
-    {
-      id: 2,
-      title: "Creative Design Workshop",
-      date: "March 20, 2024",
-      time: "2:00 PM", 
-      location: "Design Studio Downtown",
-      attendees: 45,
-      image: "https://images.unsplash.com/photo-1559223607-b4d0555ae227?w=400&h=200&fit=crop"
-    },
-    {
-      id: 3,
-      title: "Networking Happy Hour",
-      date: "March 22, 2024",
-      time: "6:00 PM",
-      location: "Rooftop Bar & Lounge",
-      attendees: 120,
-      image: "https://images.unsplash.com/photo-1511578314322-379afb476865?w=400&h=200&fit=crop"
-    }
-  ];
+  const [featuredEvents, setFeaturedEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated, user } = useAuth();
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const response = await eventService.getAllEvents({
+          limit: 3,
+          status: 'upcoming',
+          page: 1
+        });
+        setFeaturedEvents(response.events);
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to load events');
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, []);
 
   const features = [
     {
@@ -61,30 +58,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-orange-50">
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <CalendarDays className="h-8 w-8 text-blue-600" />
-              <span className="text-2xl font-bold text-gray-900">Event Ease</span>
-            </div>
-            <div className="hidden md:flex items-center space-x-6">
-              <Link to="/events" className="text-gray-600 hover:text-blue-600 transition-colors">Events</Link>
-              <Link to="/calendar" className="text-gray-600 hover:text-blue-600 transition-colors">Calendar</Link>
-              <Link to="/about" className="text-gray-600 hover:text-blue-600 transition-colors">About</Link>
-            </div>
-            <div className="flex items-center space-x-3">
-              <Button variant="ghost" asChild>
-                <Link to="/login">Login</Link>
-              </Button>
-              <Button asChild className="bg-blue-600 hover:bg-blue-700">
-                <Link to="/register">Get Started</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Header />
 
       {/* Hero Section */}
       <section className="py-20 px-4">
@@ -94,16 +68,25 @@ const Index = () => {
             <span className="text-blue-600 block">Event Management</span>
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Create, discover, and manage events effortlessly. Whether you're an organizer or participant, 
+            Create, discover, and manage events effortlessly. Whether you're an organizer or participant,
             Event Ease makes event management simple and enjoyable.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 px-8 py-3 text-lg" asChild>
-              <Link to="/create-event">
-                Create Event
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+            {isAuthenticated && user?.role === 'organizer' ? (
+              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 px-8 py-3 text-lg" asChild>
+                <Link to="/create-event">
+                  Create Event
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+            ) : (
+              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 px-8 py-3 text-lg" asChild>
+                <Link to="/register">
+                  Get Started
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+            )}
             <Button size="lg" variant="outline" className="px-8 py-3 text-lg" asChild>
               <Link to="/events">Browse Events</Link>
             </Button>
@@ -149,39 +132,53 @@ const Index = () => {
               Discover amazing events happening near you
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredEvents.map((event) => (
-              <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="aspect-video bg-gradient-to-r from-blue-500 to-orange-500"></div>
-                <CardHeader>
-                  <CardTitle className="text-lg">{event.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <div className="flex items-center">
-                      <CalendarDays className="h-4 w-4 mr-2" />
-                      {event.date}
+          {loading ? (
+            <div className="text-center text-gray-600">Loading events...</div>
+          ) : error ? (
+            <div className="text-center text-red-600">{error}</div>
+          ) : featuredEvents.length === 0 ? (
+            <div className="text-center text-gray-600">
+              No events available. {user?.role === 'organizer' ? (
+                <Link to="/create-event" className="text-blue-600 hover:underline">Create one now!</Link>
+              ) : (
+                'Be the first to create one!'
+              )}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredEvents.map((event) => (
+                <Card key={event._id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                  <div className="aspect-video bg-gradient-to-r from-blue-500 to-orange-500"></div>
+                  <CardHeader>
+                    <CardTitle className="text-lg">{event.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <div className="flex items-center">
+                        <CalendarDays className="h-4 w-4 mr-2" />
+                        {format(new Date(event.date), 'MMMM d, yyyy')}
+                      </div>
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-2" />
+                        {event.time}
+                      </div>
+                      <div className="flex items-center">
+                        <MapPin className="h-4 w-4 mr-2" />
+                        {event.location}
+                      </div>
+                      <div className="flex items-center">
+                        <Users className="h-4 w-4 mr-2" />
+                        {event.attendees.length} attendees
+                      </div>
                     </div>
-                    <div className="flex items-center">
-                      <Clock className="h-4 w-4 mr-2" />
-                      {event.time}
-                    </div>
-                    <div className="flex items-center">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {event.location}
-                    </div>
-                    <div className="flex items-center">
-                      <Users className="h-4 w-4 mr-2" />
-                      {event.attendees} attendees
-                    </div>
-                  </div>
-                  <Button className="w-full mt-4" variant="outline">
-                    View Details
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <Button className="w-full mt-4" variant="outline" asChild>
+                      <Link to={`/events/${event._id}`}>View Details</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -194,9 +191,11 @@ const Index = () => {
           <p className="text-xl mb-8 opacity-90">
             Join thousands of organizers and participants using Event Ease
           </p>
-          <Button size="lg" variant="secondary" className="px-8 py-3 text-lg" asChild>
-            <Link to="/register">Create Your Account</Link>
-          </Button>
+          {!isAuthenticated && (
+            <Button size="lg" variant="secondary" className="px-8 py-3 text-lg" asChild>
+              <Link to="/register">Create Your Account</Link>
+            </Button>
+          )}
         </div>
       </section>
 
@@ -217,7 +216,9 @@ const Index = () => {
               <h3 className="font-semibold mb-4">Product</h3>
               <ul className="space-y-2 text-gray-400">
                 <li><Link to="/events" className="hover:text-white transition-colors">Browse Events</Link></li>
-                <li><Link to="/create-event" className="hover:text-white transition-colors">Create Event</Link></li>
+                {isAuthenticated && user?.role === 'organizer' && (
+                  <li><Link to="/create-event" className="hover:text-white transition-colors">Create Event</Link></li>
+                )}
                 <li><Link to="/calendar" className="hover:text-white transition-colors">Calendar</Link></li>
               </ul>
             </div>

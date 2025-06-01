@@ -1,99 +1,39 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, MapPin, Clock, Users, Search, Filter, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { eventService, Event } from '@/services/eventService';
+import { format } from 'date-fns';
 
 const Events = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const events = [
-    {
-      id: 1,
-      title: "Tech Innovation Summit 2024",
-      description: "Join industry leaders for cutting-edge tech discussions and networking opportunities.",
-      date: "March 15, 2024",
-      time: "9:00 AM - 5:00 PM",
-      location: "San Francisco Convention Center",
-      attendees: 250,
-      category: "Technology",
-      price: "Free",
-      organizer: "Tech Community SF"
-    },
-    {
-      id: 2,
-      title: "Creative Design Workshop",
-      description: "Hands-on workshop covering modern design principles and tools.",
-      date: "March 20, 2024",
-      time: "2:00 PM - 6:00 PM",
-      location: "Design Studio Downtown",
-      attendees: 45,
-      category: "Design",
-      price: "$75",
-      organizer: "Creative Collective"
-    },
-    {
-      id: 3,
-      title: "Networking Happy Hour",
-      description: "Connect with professionals from various industries in a relaxed setting.",
-      date: "March 22, 2024",
-      time: "6:00 PM - 9:00 PM",
-      location: "Rooftop Bar & Lounge",
-      attendees: 120,
-      category: "Networking",
-      price: "$25",
-      organizer: "Business Network"
-    },
-    {
-      id: 4,
-      title: "Startup Pitch Competition",
-      description: "Watch innovative startups pitch their ideas to a panel of investors.",
-      date: "March 25, 2024",
-      time: "7:00 PM - 10:00 PM",
-      location: "Innovation Hub",
-      attendees: 200,
-      category: "Business",
-      price: "Free",
-      organizer: "Startup Accelerator"
-    },
-    {
-      id: 5,
-      title: "Photography Masterclass",
-      description: "Learn advanced photography techniques from professional photographers.",
-      date: "March 28, 2024",
-      time: "10:00 AM - 4:00 PM",
-      location: "Photo Studio Plus",
-      attendees: 30,
-      category: "Arts",
-      price: "$150",
-      organizer: "Photo Masters"
-    },
-    {
-      id: 6,
-      title: "AI & Machine Learning Conference",
-      description: "Explore the latest developments in artificial intelligence and machine learning.",
-      date: "April 2, 2024",
-      time: "9:00 AM - 6:00 PM",
-      location: "Tech Center",
-      attendees: 300,
-      category: "Technology",
-      price: "$200",
-      organizer: "AI Society"
-    }
-  ];
+  const categories = ['all', 'conference', 'workshop', 'seminar', 'networking', 'other'];
 
-  const categories = ['all', 'Technology', 'Design', 'Networking', 'Business', 'Arts'];
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const response = await eventService.getAllEvents({
+          category: selectedCategory !== 'all' ? selectedCategory : undefined,
+          search: searchTerm || undefined
+        });
+        setEvents(response.events);
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to load events');
+        setLoading(false);
+      }
+    };
 
-  const filteredEvents = events.filter(event => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || event.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+    fetchEvents();
+  }, [selectedCategory, searchTerm]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -144,7 +84,7 @@ const Events = () => {
               Filters
             </Button>
           </div>
-          
+
           <div className="flex gap-2 flex-wrap">
             {categories.map((category) => (
               <Button
@@ -162,65 +102,76 @@ const Events = () => {
 
         {/* Events Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((event) => (
-            <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
-              <div className="aspect-video bg-gradient-to-r from-blue-500 to-purple-600 relative">
-                <Badge className="absolute top-3 left-3 bg-white text-gray-900">
-                  {event.category}
-                </Badge>
-                <Badge className="absolute top-3 right-3 bg-orange-500">
-                  {event.price}
-                </Badge>
+          {loading ? (
+            <div className="col-span-3 text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading events...</p>
+            </div>
+          ) : error ? (
+            <div className="col-span-3 text-center py-12 text-red-600">
+              {error}
+            </div>
+          ) : events.length === 0 ? (
+            <div className="col-span-3 text-center py-12">
+              <div className="text-gray-400 mb-4">
+                <Search className="h-16 w-16 mx-auto" />
               </div>
-              <CardHeader>
-                <CardTitle className="text-lg line-clamp-2">{event.title}</CardTitle>
-                <p className="text-sm text-gray-600 line-clamp-2">{event.description}</p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center">
-                    <CalendarDays className="h-4 w-4 mr-2 text-blue-600" />
-                    {event.date}
-                  </div>
-                  <div className="flex items-center">
-                    <Clock className="h-4 w-4 mr-2 text-blue-600" />
-                    {event.time}
-                  </div>
-                  <div className="flex items-center">
-                    <MapPin className="h-4 w-4 mr-2 text-blue-600" />
-                    {event.location}
-                  </div>
-                  <div className="flex items-center">
-                    <Users className="h-4 w-4 mr-2 text-blue-600" />
-                    {event.attendees} registered
-                  </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No events found</h3>
+              <p className="text-gray-600 mb-4">Try adjusting your search criteria or explore different categories.</p>
+              <Button asChild>
+                <Link to="/create-event">Create Your Own Event</Link>
+              </Button>
+            </div>
+          ) : (
+            events.map((event) => (
+              <Card key={event._id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                <div className="aspect-video bg-gradient-to-r from-blue-500 to-purple-600 relative">
+                  <Badge className="absolute top-3 left-3 bg-white text-gray-900">
+                    {event.category}
+                  </Badge>
+                  <Badge className="absolute top-3 right-3 bg-orange-500">
+                    ${event.price}
+                  </Badge>
                 </div>
-                <div className="pt-2">
-                  <p className="text-xs text-gray-500 mb-3">Organized by {event.organizer}</p>
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                    Register Now
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                <CardHeader>
+                  <CardTitle className="text-lg line-clamp-2">{event.title}</CardTitle>
+                  <p className="text-sm text-gray-600 line-clamp-2">{event.description}</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <div className="flex items-center">
+                      <CalendarDays className="h-4 w-4 mr-2 text-blue-600" />
+                      {format(new Date(event.date), 'MMMM d, yyyy')}
+                    </div>
+                    <div className="flex items-center">
+                      <Clock className="h-4 w-4 mr-2 text-blue-600" />
+                      {event.time}
+                    </div>
+                    <div className="flex items-center">
+                      <MapPin className="h-4 w-4 mr-2 text-blue-600" />
+                      {event.location}
+                    </div>
+                    <div className="flex items-center">
+                      <Users className="h-4 w-4 mr-2 text-blue-600" />
+                      {event.attendees.length} registered
+                    </div>
+                  </div>
+                  <div className="pt-2">
+                    <p className="text-xs text-gray-500 mb-3">
+                      Organized by {event.organizer.firstName} {event.organizer.lastName}
+                    </p>
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                      Register Now
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
 
-        {filteredEvents.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
-              <Search className="h-16 w-16 mx-auto" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No events found</h3>
-            <p className="text-gray-600 mb-4">Try adjusting your search criteria or explore different categories.</p>
-            <Button asChild>
-              <Link to="/create-event">Create Your Own Event</Link>
-            </Button>
-          </div>
-        )}
-
         {/* Pagination would go here */}
-        {filteredEvents.length > 0 && (
+        {events.length > 0 && (
           <div className="mt-12 flex justify-center">
             <div className="flex space-x-2">
               <Button variant="outline" disabled>Previous</Button>
