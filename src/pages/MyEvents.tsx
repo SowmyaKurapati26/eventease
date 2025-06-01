@@ -9,6 +9,23 @@ import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
 import { BackButton } from '@/components/BackButton';
+import { ParticipantsModal } from '@/components/ParticipantsModal';
+import { useToast } from '@/components/ui/use-toast';
+
+const getStatusVariant = (status: string): "default" | "destructive" | "secondary" | "outline" => {
+    switch (status.toLowerCase()) {
+        case 'upcoming':
+            return 'default';
+        case 'ongoing':
+            return 'default';
+        case 'completed':
+            return 'secondary';
+        case 'cancelled':
+            return 'destructive';
+        default:
+            return 'default';
+    }
+};
 
 const MyEvents = () => {
     const [createdEvents, setCreatedEvents] = useState<Event[]>([]);
@@ -16,8 +33,12 @@ const MyEvents = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+    const [participants, setParticipants] = useState<Event['attendees']>([]);
+    const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { toast } = useToast();
 
     useEffect(() => {
         const fetchMyEvents = async () => {
@@ -64,6 +85,22 @@ const MyEvents = () => {
         event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         event.description.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const handleViewParticipants = async (event: Event) => {
+        try {
+            const attendees = await eventService.getEventAttendees(event._id);
+            setParticipants(attendees);
+            setSelectedEvent(event);
+            setIsParticipantsModalOpen(true);
+        } catch (error) {
+            console.error('Error fetching participants:', error);
+            toast({
+                title: "Error",
+                description: "Failed to load participants",
+                variant: "destructive"
+            });
+        }
+    };
 
     if (loading) {
         return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;
@@ -137,47 +174,44 @@ const MyEvents = () => {
                                                 <CardTitle className="text-xl mb-2">{event.title}</CardTitle>
                                                 <p className="text-sm text-gray-600">{event.description}</p>
                                             </div>
-                                            <div className="flex space-x-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    onClick={() => navigate(`/edit-event/${event._id}`)}
-                                                >
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    onClick={() => handleDeleteEvent(event._id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
+                                            <Badge variant={getStatusVariant(event.status)}>{event.status}</Badge>
                                         </div>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="space-y-2 text-sm text-gray-600">
-                                            <div className="flex items-center">
-                                                <CalendarDays className="h-4 w-4 mr-2 text-blue-600" />
-                                                {formatEventDate(event.date)}
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <div className="flex items-center text-sm text-gray-600">
+                                                    <CalendarDays className="h-4 w-4 mr-2" />
+                                                    {format(new Date(event.date), 'PPP')}
+                                                </div>
+                                                <div className="flex items-center text-sm text-gray-600">
+                                                    <Clock className="h-4 w-4 mr-2" />
+                                                    {event.time}
+                                                </div>
+                                                <div className="flex items-center text-sm text-gray-600">
+                                                    <MapPin className="h-4 w-4 mr-2" />
+                                                    {event.location}
+                                                </div>
+                                                <div className="flex items-center text-sm text-gray-600">
+                                                    <Users className="h-4 w-4 mr-2" />
+                                                    {event.attendees?.length || 0} {event.maxAttendees ? `/ ${event.maxAttendees}` : ''} Attendees
+                                                </div>
                                             </div>
-                                            <div className="flex items-center">
-                                                <Clock className="h-4 w-4 mr-2 text-blue-600" />
-                                                {event.time}
-                                            </div>
-                                            <div className="flex items-center">
-                                                <MapPin className="h-4 w-4 mr-2 text-blue-600" />
-                                                {event.location}
-                                                {event.locationType === 'online' && ' (Online)'}
-                                            </div>
-                                            <div className="flex items-center">
-                                                <Users className="h-4 w-4 mr-2 text-blue-600" />
-                                                {event.attendees.length} / {event.maxAttendees || '∞'} registered
-                                            </div>
-                                            <div className="flex items-center">
-                                                <Badge variant={event.status === 'upcoming' ? 'default' : 'secondary'}>
-                                                    {event.status}
-                                                </Badge>
+                                            <div className="flex flex-col space-y-2">
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={() => handleViewParticipants(event)}
+                                                    className="w-full"
+                                                >
+                                                    <Users className="h-4 w-4 mr-2" />
+                                                    See Participants
+                                                </Button>
+                                                <Button variant="outline" asChild>
+                                                    <Link to={`/events/${event._id}/edit`}>
+                                                        <Edit className="h-4 w-4 mr-2" />
+                                                        Edit Event
+                                                    </Link>
+                                                </Button>
                                             </div>
                                         </div>
                                     </CardContent>
@@ -245,6 +279,18 @@ const MyEvents = () => {
                     </Card>
                 )}
             </div>
+
+            {selectedEvent && (
+                <ParticipantsModal
+                    isOpen={isParticipantsModalOpen}
+                    onClose={() => {
+                        setIsParticipantsModalOpen(false);
+                        setSelectedEvent(null);
+                    }}
+                    participants={participants}
+                    eventTitle={selectedEvent.title}
+                />
+            )}
         </div>
     );
 };
